@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ห้องนี้ร้อนแค่ไหน</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #EAF0F3; --panel: #FFFFFF; --ink: #1D2A33; --muted: #607480;
+    --line: #CBD6DC; --mercury: #D6453D; --water: #2A8C9A; --glass: #F4F8FA;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #121B21; --panel: #1A262E; --ink: #E6EEF2; --muted: #93A6B1;
+      --line: #2C3B45; --mercury: #F0645A; --water: #4DB6C4; --glass: #22313A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #121B21; --panel: #1A262E; --ink: #E6EEF2; --muted: #93A6B1;
+    --line: #2C3B45; --mercury: #F0645A; --water: #4DB6C4; --glass: #22313A;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "IBM Plex Sans Thai", "Sarabun", "Noto Sans Thai", system-ui, sans-serif;
+    line-height: 1.55;
+  }
+  main { max-width: 480px; margin: 0 auto; padding: 20px 18px 32px; }
+
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  h1 { font-size: 1.15rem; font-weight: 700; margin: 0; }
+  .status { font-size: .85rem; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+  .on .dot { background: #2FA36B; }
+
+  button {
+    font: inherit; font-weight: 500; border: 0; cursor: pointer;
+    background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 999px;
+  }
+  button:focus-visible { outline: 3px solid var(--water); outline-offset: 2px; }
+
+  /* เทอร์โมมิเตอร์ — จุดเด่นของหน้า */
+  .thermo {
+    margin-top: 22px; background: var(--panel); border-radius: 28px;
+    padding: 26px 24px; display: grid; grid-template-columns: 56px 1fr; gap: 22px; align-items: end;
+  }
+  .tube {
+    position: relative; height: 240px; width: 26px; margin: 0 auto 30px;
+    background: var(--glass); border: 2px solid var(--line); border-radius: 14px;
+  }
+  .tube::after {
+    content: ""; position: absolute; left: 50%; bottom: -34px; transform: translateX(-50%);
+    width: 46px; height: 46px; border-radius: 50%; background: var(--mercury);
+  }
+  .fill {
+    position: absolute; left: 4px; right: 4px; bottom: 0; height: 0%;
+    background: var(--mercury); border-radius: 10px 10px 0 0;
+    transition: height .8s ease;
+  }
+  .reading { padding-bottom: 8px; }
+  .temp { font-size: clamp(4.5rem, 24vw, 6.5rem); font-weight: 700; line-height: 1; letter-spacing: -0.04em; }
+  .temp small { font-size: .35em; font-weight: 500; letter-spacing: 0; margin-left: 4px; color: var(--muted); }
+  .feel { margin: 10px 0 0; font-size: 1.05rem; }
+  .updated { margin: 4px 0 0; font-size: .85rem; color: var(--muted); }
+
+  .humid { margin-top: 14px; background: var(--panel); border-radius: 18px; padding: 18px 20px; }
+  .humid-row { display: flex; justify-content: space-between; align-items: baseline; }
+  .humid-row strong { font-size: 1.6rem; }
+  .bar { height: 10px; background: var(--glass); border-radius: 5px; margin-top: 10px; overflow: hidden; }
+  .bar span { display: block; height: 100%; width: 0%; background: var(--water); transition: width .8s ease; }
+
+  .history { margin-top: 14px; background: var(--panel); border-radius: 18px; padding: 18px 20px; }
+  .history p { margin: 0 0 8px; font-size: .9rem; color: var(--muted); }
+  canvas { width: 100%; height: 140px; display: block; }
+
+  .note { margin-top: 18px; font-size: .85rem; color: var(--muted); }
+  .error { color: var(--mercury); }
+
+  @media (prefers-reduced-motion: reduce) { .fill, .bar span { transition: none; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>ห้องนี้ร้อนแค่ไหน</h1>
+      <div class="status" id="status"><span class="dot"></span><span id="statusText">ยังไม่ได้เชื่อมต่อ</span></div>
+    </div>
+    <button id="connectBtn">เชื่อมต่อ</button>
+  </header>
+
+  <section class="thermo" aria-live="polite">
+    <div class="tube"><div class="fill" id="fill"></div></div>
+    <div class="reading">
+      <div class="temp"><span id="temp">--</span><small>°C</small></div>
+      <p class="feel" id="feel">กด “เชื่อมต่อ” แล้วเลือก ESP32-DHT11</p>
+      <p class="updated" id="updated"></p>
+    </div>
+  </section>
+
+  <section class="humid">
+    <div class="humid-row"><span>ความชื้นในอากาศ</span><strong><span id="hum">--</span>%</strong></div>
+    <div class="bar"><span id="humBar"></span></div>
+  </section>
+
+  <section class="history">
+    <p>อุณหภูมิย้อนหลัง 2 นาที</p>
+    <canvas id="chart"></canvas>
+  </section>
+
+  <p class="note" id="note">ใช้ได้กับ Chrome บน Android และคอมพิวเตอร์ (iPhone ต้องใช้แอป Bluefy)</p>
+</main>
+
+<script>
+  // ต้องตรงกับในโค้ด ESP32
+  const SERVICE_UUID = "7a1c0001-5b3e-4f6a-9d2c-8e4b1f0a6c01";
+  const CHAR_UUID    = "7a1c0002-5b3e-4f6a-9d2c-8e4b1f0a6c01";
+
+  const $ = id => document.getElementById(id);
+  let device = null;
+  const history = [];          // เก็บ 60 ค่าล่าสุด (ทุก 2 วินาที = 2 นาที)
+
+  function setStatus(text, on) {
+    $("statusText").textContent = text;
+    $("status").classList.toggle("on", on);
+    $("connectBtn").textContent = on ? "ตัดการเชื่อมต่อ" : "เชื่อมต่อ";
+  }
+
+  function describe(t) {
+    if (t < 20) return "ค่อนข้างเย็น";
+    if (t < 26) return "กำลังสบาย";
+    if (t < 30) return "เริ่มอุ่น";
+    if (t < 34) return "ร้อน เปิดพัดลมหน่อย";
+    return "ร้อนมาก ระวังเครื่องไหม้";
+  }
+
+  function show(t, h) {
+    $("temp").textContent = t.toFixed(1);
+    $("hum").textContent = Math.round(h);
+    $("feel").textContent = describe(t);
+    $("updated").textContent = "อัปเดต " + new Date().toLocaleTimeString("th-TH");
+    // หลอดปรอทแสดงช่วง 0–50 °C (ช่วงที่ DHT11 วัดได้)
+    $("fill").style.height = Math.min(100, Math.max(0, t / 50 * 100)) + "%";
+    $("humBar").style.width = Math.min(100, Math.max(0, h)) + "%";
+    history.push(t);
+    if (history.length > 60) history.shift();
+    drawChart();
+  }
+
+  function drawChart() {
+    const c = $("chart"), ctx = c.getContext("2d");
+    const dpr = window.devicePixelRatio || 1;
+    c.width = c.clientWidth * dpr; c.height = c.clientHeight * dpr;
+    ctx.scale(dpr, dpr);
+    const w = c.clientWidth, h = c.clientHeight;
+    ctx.clearRect(0, 0, w, h);
+    if (history.length < 2) return;
+    const css = getComputedStyle(document.documentElement);
+    const min = Math.min(...history) - 1, max = Math.max(...history) + 1;
+    const x = i => i / 59 * w;
+    const y = v => h - 16 - (v - min) / (max - min) * (h - 32);
+    ctx.strokeStyle = css.getPropertyValue("--mercury"); ctx.lineWidth = 2.5; ctx.lineJoin = "round";
+    ctx.beginPath();
+    history.forEach((v, i) => i ? ctx.lineTo(x(i), y(v)) : ctx.moveTo(x(i), y(v)));
+    ctx.stroke();
+    ctx.fillStyle = css.getPropertyValue("--muted"); ctx.font = "12px sans-serif";
+    ctx.fillText(max.toFixed(0) + "°", 0, 12);
+    ctx.fillText(min.toFixed(0) + "°", 0, h - 2);
+  }
+
+  function onData(e) {
+    try {
+      const text = new TextDecoder().decode(e.target.value);
+      const d = JSON.parse(text);
+      if (typeof d.t === "number") show(d.t, d.h);
+    } catch (err) { console.warn("ข้อมูลไม่ถูกต้อง", err); }
+  }
+
+  async function connect() {
+    if (!navigator.bluetooth) {
+      $("note").innerHTML = '<span class="error">เบราว์เซอร์นี้ใช้ Bluetooth ไม่ได้ ให้เปิดหน้านี้ด้วย Chrome บน Android และเปิดผ่านลิงก์ https</span>';
+      return;
+    }
+    try {
+      setStatus("กำลังค้นหาอุปกรณ์...", false);
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ name: "ESP32-DHT11" }],
+        optionalServices: [SERVICE_UUID]
+      });
+      device.addEventListener("gattserverdisconnected", () => setStatus("หลุดการเชื่อมต่อ", false));
+      const server = await device.gatt.connect();
+      const service = await server.getPrimaryService(SERVICE_UUID);
+      const ch = await service.getCharacteristic(CHAR_UUID);
+      ch.addEventListener("characteristicvaluechanged", onData);
+      await ch.startNotifications();
+      setStatus("เชื่อมต่อกับ " + device.name, true);
+      const first = await ch.readValue();     // อ่านค่าแรกทันที ไม่ต้องรอ 2 วินาที
+      onData({ target: { value: first } });
+    } catch (err) {
+      setStatus("เชื่อมต่อไม่สำเร็จ", false);
+      $("note").innerHTML = '<span class="error">' + err.message + '</span>';
+    }
+  }
+
+  $("connectBtn").addEventListener("click", () => {
+    if (device && device.gatt.connected) device.gatt.disconnect();
+    else connect();
+  });
+  window.addEventListener("resize", drawChart);
+</script>
+</body>
+</html>
